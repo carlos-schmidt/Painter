@@ -1,0 +1,23 @@
+name: painter
+channels:
+    - conda-forge
+#    - nvidia
+    - pytorch
+dependencies:
+#    - nvidia/label/cuda-11.8.0::cuda-toolkit 
+    - cpuonly
+    - python=3.9
+    - pip
+    - numpy
+    - scipy
+    - matplotlib
+    - tqdm
+    - pillow
+    - pytorch::pytorch
+    - pytorch::torchvision
+    - detectron2
+    - natsort
+    - iopath
+    - pip:
+        - fairscale
+        - timm==0.3.2
