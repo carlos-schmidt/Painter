@@ -468,8 +468,9 @@ class Painter(nn.Module):
             bool_masked_pos = bool_masked_pos.flatten(1).to(torch.bool)
         latent = self.forward_encoder(imgs, tgts, bool_masked_pos)
         pred = self.forward_decoder(latent)  # [N, L, p*p*3]
-        loss = self.forward_loss(pred, tgts, bool_masked_pos, valid)
-        return loss, self.patchify(pred), bool_masked_pos
+        #loss = self.forward_loss(pred, tgts, bool_masked_pos, valid)
+        #return loss, self.patchify(pred), bool_masked_pos   
+        return None, self.patchify(pred), bool_masked_pos
 
 
 
