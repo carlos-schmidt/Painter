@@ -20,7 +20,7 @@ from fairscale.nn.checkpoint import checkpoint_wrapper
 from timm.models.layers import DropPath, trunc_normal_
 from timm.models.vision_transformer import Mlp
 
-from util.vitdet_utils import (
+from vitdet_utils import (
     PatchEmbed,
     add_decomposed_rel_pos,
     get_abs_pos,
