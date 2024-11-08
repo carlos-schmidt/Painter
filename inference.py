@@ -1,6 +1,5 @@
 import torch
 import torchvision
-from torchvision.transforms.functional import pil_to_tensor
 
 from models_painter import (
     painter_vit_large_patch16_input896x448_win_dec64_8glb_sl1 as painter_config,
@@ -28,10 +27,10 @@ class Painter:
         """Image tensors of shape c,h**22,w"""
         assert top.shape == bottom.shape
 
-        grid = torch.zeros(size=(top.shape[0], top.shape[1]*2, top.shape[2]))
+        grid = torch.zeros(size=(top.shape[0], top.shape[1] * 2, top.shape[2]))
 
         grid[:, : top.shape[1], : top.shape[2]] = top
-        grid[:, bottom.shape[1] : , : bottom.shape[2]] = bottom
+        grid[:, bottom.shape[1] :, : bottom.shape[2]] = bottom
 
         return grid
 
@@ -43,7 +42,8 @@ class Painter:
             img_batch (list): List of list of PIL images
         """
         batch_size = len(img_batch)
-        img_batch = [[image_transform(image) for image in b] for b in img_batch]
+        if type(img_batch[0]) is not torch.Tensor:
+            img_batch = [[image_transform(image) for image in b] for b in img_batch]
 
         ctx_grids = torch.stack(
             [self.images_to_grid(b[-3], b[-2]) for b in img_batch]
@@ -75,45 +75,48 @@ class Painter:
         # pred = clamp((pred * imagenet_std + imagenet_mean), 0.0, 1.0) ?
 
         # Resize to original
-        #pred = torch.nn.functional.interpolate(            pred.permute(0, 3, 1, 2), original_sizes, mode="bicubic"        ).permute(0, 2, 3, 1)
+        # pred = torch.nn.functional.interpolate(            pred.permute(0, 3, 1, 2), original_sizes, mode="bicubic"        ).permute(0, 2, 3, 1)
 
         return pred
 
 
 if __name__ == "__main__":
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    import numpy as np
-    painter = Painter(model_path="./painter_vit_large.pth")
+    model = Painter(model_path="./painter_vit_large.pth")
 
-    def url_to_pil(url) -> Image.Image:
-        response = requests.get(url)
-        img = Image.open(BytesIO(response.content))
-        return img
+    from dataset import InteractiveDataset
+    from torchvision.transforms.functional import to_pil_image, resize, to_tensor
+    from torchvision.transforms import Compose, Resize, InterpolationMode, ToTensor
+    from torch.utils.data import DataLoader
+    from os import makedirs
 
-    # These are from the visual_prompting repo
-    source = "https://d2908q01vomqb2.cloudfront.net/f1f836cb4ea6efb2a0b1b99f41ad8b103eff4b59/2022/06/14/ML-8362-image001-300.jpg"
-    target = "https://d2908q01vomqb2.cloudfront.net/f1f836cb4ea6efb2a0b1b99f41ad8b103eff4b59/2022/06/14/ML-8362-image003-300.png"
-    new_source = "https://static.scientificamerican.com/sciam/cache/file/1E3A3E62-B3CA-434A-8C3B3ED0C982FB69_source.jpg?w=590&h=800&C8DB8C57-989B-4118-AE27EF1191E878A5"
-
-    imgs = painter.inference(
+    resize = Compose(
         [
-            [
-                url_to_pil(source).convert("RGB"),
-                url_to_pil(target).convert("RGB"),
-                url_to_pil(new_source).convert("RGB"),
-            ],
-            [
-                url_to_pil(source).convert("RGB"),
-                url_to_pil(target).convert("RGB"),
-                url_to_pil(new_source).convert("RGB"),
-            ],
+            Resize((111, 111), interpolation=InterpolationMode.BILINEAR),
+            ToTensor(),
         ]
     )
 
-    print(imgs.shape, imgs[0].shape)
-    out = imgs[0] * 255.
-    out = out.detach().cpu().numpy().astype(np.uint8)
-    
-    Image.fromarray(out).save("test.png")
+    dataset = InteractiveDataset(
+        "/home/carlos/VOC2012",
+        "InteractionsMerged",
+        "SegmentationSingleObjects",
+        transform=resize,
+    )
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=0)
+
+    for i, batch in enumerate(dataloader):
+        model_input = []
+        for image, gt in zip(*batch.values()):
+            model_input.append(image)
+            model_input.append(gt)
+
+        # remove last gt
+        outputs = model.inference([torch.stack(model_input[:-1])])
+
+        # bottom right corner
+        model_input.append(outputs[0][:, 113:, 113:])
+        model_input.append(resize(to_pil_image(outputs[0])))
+        catted = torch.cat(model_input, dim=2)
+
+        makedirs("./interactive_demo/", exist_ok=True)
+        to_pil_image(catted).save(f"./interactive_demo/{i}.png")
